@@ -1,7 +1,9 @@
-import type { NextPage } from 'next'
+import type { GetServerSideProps, NextPage } from 'next'
+import { parseCookies } from 'nookies'
 import { FormEvent, useContext, useState } from 'react'
 import { AuthContext } from '../contexts/AuthContext'
 import styles from '../styles/Home.module.css'
+import { withSSRGuest } from '../utils/withSSRGuest'
 
 // component responsible for authenticate a user
 const Home: NextPage = () => {
@@ -9,7 +11,7 @@ const Home: NextPage = () => {
   // useState on form items
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  // getting context fucntion to authenticate the user
+  // getting context function to authenticate the user
   const { signIn } = useContext(AuthContext)
 
   // responsible to call the context to autenticate the user
@@ -31,3 +33,11 @@ const Home: NextPage = () => {
 }
 
 export default Home
+
+// getting props from server side render
+export const getServerSideProps: GetServerSideProps = withSSRGuest(async (ctx) => {
+  
+  return {
+    props: {}
+  }
+})

@@ -1,5 +1,14 @@
-import { createContext, ReactNode } from "react";
+import { createContext, ReactNode, useEffect, useState } from "react";
+import Router from "next/router";
 import { api } from "../services/api";
+import { setCookie, parseCookies, destroyCookie } from 'nookies';
+
+//type of user, and roles, permissions
+type User = {
+  email: string;
+  permissions: string[];
+  roles: string[]
+}
  
 //type of credentials to be passed by the user.
 type SignCredentials = {
@@ -10,6 +19,7 @@ type SignCredentials = {
 type AuthContextData = {
   signIn(credentials: SignCredentials): Promise<void>;
   isAuthenticated: boolean
+  user: User
 }
 //type of children, to be inside the context
 // when using ReactNode, means that anything can be passed as children
@@ -19,10 +29,36 @@ type AuthProviderProps = {
 // contant with context information
 export const AuthContext = createContext({} as AuthContextData)
 
+export function signOut() {
+  destroyCookie(undefined, 'nextauth.token')
+  destroyCookie(undefined, 'nextauth.refreshToken')
+
+  Router.push('/')
+}
+
 // function that create the elements with the designed context
 export function AuthProvider({ children }: AuthProviderProps) {
+// setting user to null, when the app begins
+  const [user, setUser] = useState<User>()
+  // const responsable to know if user is authenticated or not
+  const isAuthenticated = !!user;
+  
+  // execute one time on every call
+  useEffect(() => {
+    // get saved cookies
+    const { 'nextauth.token': token } = parseCookies()
+    // if there is a token, will make a request to get the permissions
+    if (token) {
+      api.get('/me').then(response => {
+        const { email, permissions, roles } = response.data
 
-  const isAuthenticated = false;
+        setUser({ email, permissions, roles})
+      }).catch(() => {
+        signOut()
+      })
+    }
+  }, [])
+
   //function responsible to get a jwt
   async function signIn({ email, password }: SignCredentials) {
     // if api response with status different than 200 next will throw a exception
@@ -31,6 +67,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
         email,
         password
       })
+      // desctruturing the object response
+      const { token, refreshToken, permissions, roles } = response.data;
+      
+      // this function creates a cookie on the browser
+      setCookie(undefined, 'nextauth.token', token, {
+        maxAge: 60 * 60 * 24 * 30, // 30 days
+        path: '/'
+      })
+
+      setCookie(undefined, 'nextauth.refreshToken', refreshToken, {
+        maxAge: 60 * 60 * 24 * 30, // 30 days
+        path: '/'
+      })
+
+      // update user on the context
+      setUser({
+        email,
+        permissions,
+        roles
+      })
+
+      // resets the headers default configuration before redirects
+      api.defaults.headers['Authorization'] = `Bearer ${token}`
+      
+      // Redirects user to home when login is suscceful
+      Router.push('/dashboard')
 
 
     } catch (error) {
@@ -42,7 +104,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
 
   return (
-    <AuthContext.Provider value={{signIn, isAuthenticated}}>
+    <AuthContext.Provider value={{signIn, isAuthenticated, user}}>
       {children}
     </AuthContext.Provider>
   )
