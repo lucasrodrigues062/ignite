@@ -1,7 +1,8 @@
 import { createContext, ReactNode, useEffect, useState } from "react";
 import Router from "next/router";
-import { api } from "../services/api";
 import { setCookie, parseCookies, destroyCookie } from 'nookies';
+import { api } from "../services/apiClient";
+import {BroadcastChannel} from "worker_threads";
 
 //type of user, and roles, permissions
 type User = {
@@ -17,7 +18,8 @@ type SignCredentials = {
 }
 //type of context, with the member the can be acessed
 type AuthContextData = {
-  signIn(credentials: SignCredentials): Promise<void>;
+  signIn: (credentials: SignCredentials) => Promise<void>;
+  signOut: () => void;
   isAuthenticated: boolean
   user: User
 }
@@ -29,9 +31,12 @@ type AuthProviderProps = {
 // contant with context information
 export const AuthContext = createContext({} as AuthContextData)
 
+let autChannel: BroadcastChannel
+
 export function signOut() {
   destroyCookie(undefined, 'nextauth.token')
   destroyCookie(undefined, 'nextauth.refreshToken')
+  autChannel.postMessage('signOut')
 
   Router.push('/')
 }
@@ -42,7 +47,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User>()
   // const responsable to know if user is authenticated or not
   const isAuthenticated = !!user;
-  
+
+  useEffect(() => {
+    autChannel = new BroadcastChannel('auth')
+    autChannel.onmessage = (message) => {
+      switch (message.data) {
+        case 'signOut':
+          signOut()
+          break
+        default:
+          break
+      }
+    }
+  }, [])
+
   // execute one time on every call
   useEffect(() => {
     // get saved cookies
@@ -90,7 +108,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // resets the headers default configuration before redirects
       api.defaults.headers['Authorization'] = `Bearer ${token}`
-      
+
       // Redirects user to home when login is suscceful
       Router.push('/dashboard')
 
@@ -104,7 +122,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
 
   return (
-    <AuthContext.Provider value={{signIn, isAuthenticated, user}}>
+    <AuthContext.Provider value={{signIn, signOut ,isAuthenticated, user}}>
       {children}
     </AuthContext.Provider>
   )

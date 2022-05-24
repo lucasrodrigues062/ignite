@@ -7,7 +7,7 @@ export function withSSRGuest<P>(fn: GetServerSideProps<P>) {
     // getting cookies from this context
     const cookies = parseCookies(ctx)
   
-    if (!cookies['nextauth.token']) {
+    if (cookies['nextauth.token']) {
       return {
         redirect: {
           destination: '/dashboard',
